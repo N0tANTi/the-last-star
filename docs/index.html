@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>最后一颗星 · The Last Star — 交互式绘本小游戏</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Long+Cang&family=Zhi+Mang+Xing&display=swap" rel="stylesheet" />
 <style>
   :root {
     --ink: #121728;
@@ -87,16 +90,18 @@
   }
   #cover.hidden { opacity: 0; pointer-events: none; }
   #cover h1 {
-    font-size: clamp(42px, 7vw, 76px);
-    font-weight: normal; letter-spacing: 0.16em;
+    font-family: "Zhi Mang Xing", "Long Cang", "STKaiti", "KaiTi", serif;
+    font-size: clamp(50px, 8.5vw, 90px);
+    font-weight: normal; letter-spacing: 0.14em;
     color: #fff9e8;
     text-shadow: 0 0 28px rgba(255, 220, 130, 0.55), 0 4px 18px rgba(0,0,0,0.6);
-    margin-bottom: 10px;
+    margin-bottom: 12px;
   }
   #cover .sub {
-    font-size: clamp(16px, 2.3vw, 22px);
-    color: rgba(235, 238, 255, 0.88);
-    letter-spacing: 0.14em; margin-bottom: 10px;
+    font-family: "Long Cang", "Zhi Mang Xing", "STKaiti", "KaiTi", serif;
+    font-size: clamp(20px, 2.8vw, 28px);
+    color: rgba(235, 238, 255, 0.90);
+    letter-spacing: 0.12em; margin-bottom: 10px;
   }
   #cover .tag {
     font-size: 13px; color: rgba(190, 208, 255, 0.72);
@@ -1291,9 +1296,9 @@
       ctx.shadowColor = "rgba(255, 224, 140, 0.7)";
       ctx.shadowBlur = 20;
       ctx.fillStyle = "#fff9e8";
-      ctx.font = `normal ${Math.round(Math.min(72, W * 0.075))}px "KaiTi", "STKaiti", serif`;
+      ctx.font = `normal ${Math.round(Math.min(84, W * 0.085))}px "Zhi Mang Xing", "Long Cang", "STKaiti", serif`;
       ctx.fillText("最后一颗星", W * 0.56, H * 0.30);
-      ctx.font = `normal ${Math.round(Math.min(26, W * 0.028))}px "KaiTi", "STKaiti", serif`;
+      ctx.font = `normal ${Math.round(Math.min(32, W * 0.032))}px "Long Cang", "STKaiti", serif`;
       ctx.fillStyle = "rgba(232, 238, 255, 0.92)";
       ctx.fillText("每一片星空，都始于一束微光。", W * 0.56, H * 0.39);
       ctx.restore();

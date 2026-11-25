@@ -583,8 +583,16 @@ def build_star_whale_and_aurora(scene, name="StarWhale", location=(2.0, 24.0, 9.
     }
 
 
-def build_title_calligraphy(scene, font_path=r"C:\Windows\Fonts\simkai.ttf"):
-    """Build the deep-indigo cobblestone backdrop, visible robot pincer hand, glowing starlight trail, and handwritten 'The Last Star' title."""
+def build_title_calligraphy(scene, font_path=None):
+    """Build the deep-indigo cobblestone backdrop, visible robot pincer hand, glowing starlight trail, and calligraphic Chinese title."""
+    import os
+    fonts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "fonts")
+    main_font_path = font_path or os.path.join(fonts_dir, "ZhiMangXing.ttf")
+    sub_font_path = os.path.join(fonts_dir, "LongCang.ttf")
+    if not os.path.exists(main_font_path):
+        main_font_path = r"C:\Windows\Fonts\simkai.ttf"
+    if not os.path.exists(sub_font_path):
+        sub_font_path = main_font_path
     # Deep painterly Voronoi flagstone shader (rich slate-blue stones with dark mortar crevices)
     mat_stones = bpy.data.materials.new("Mat_TitleStones")
     mat_stones.use_nodes = True
@@ -712,18 +720,22 @@ def build_title_calligraphy(scene, font_path=r"C:\Windows\Fonts\simkai.ttf"):
 
     # Handwritten glowing text with animated left-to-right reveal shader!
     try:
-        font = bpy.data.fonts.load(font_path)
+        font_main = bpy.data.fonts.load(main_font_path)
     except Exception:
-        font = bpy.data.fonts.get("Bfont")
+        font_main = bpy.data.fonts.get("Bfont")
+    try:
+        font_sub = bpy.data.fonts.load(sub_font_path)
+    except Exception:
+        font_sub = font_main
 
-    def _make_reveal_text(tname, body, loc, size, reveal_val_name):
+    def _make_reveal_text(tname, body, loc, size, reveal_val_name, use_font, strength=3.4):
         tdata = bpy.data.curves.new(tname, "FONT")
         tdata.body = body
         tdata.align_x = "CENTER"
         tdata.align_y = "CENTER"
         tdata.size = size
-        if font:
-            tdata.font = font
+        if use_font:
+            tdata.font = use_font
         tobj = bpy.data.objects.new(tname, tdata)
         tobj.location = loc
         link_to_scene(scene, tobj)
@@ -736,8 +748,8 @@ def build_title_calligraphy(scene, font_path=r"C:\Windows\Fonts\simkai.ttf"):
         out = nt.nodes.new("ShaderNodeOutputMaterial")
         trans = nt.nodes.new("ShaderNodeBsdfTransparent")
         em = nt.nodes.new("ShaderNodeEmission")
-        em.inputs["Color"].default_value = (1.0, 0.96, 0.86, 1.0)
-        em.inputs["Strength"].default_value = 2.8
+        em.inputs["Color"].default_value = (1.0, 0.96, 0.85, 1.0)
+        em.inputs["Strength"].default_value = strength
         mix = nt.nodes.new("ShaderNodeMixShader")
 
         tc = nt.nodes.new("ShaderNodeTexCoord")
@@ -767,18 +779,26 @@ def build_title_calligraphy(scene, font_path=r"C:\Windows\Fonts\simkai.ttf"):
         tobj.data.materials.append(mat)
         return tobj, rev_node.outputs[0]
 
-    title_obj, title_rev = _make_reveal_text("TitleMain", "最后一颗星", (0.58, 0.56, 0.45), 0.96, "RevealMain")
-    sub_obj, sub_rev = _make_reveal_text("TitleSub", "每一片星空，都始于一束微光。", (0.58, -0.68, 0.45), 0.34, "RevealSub")
+    title_obj, title_rev = _make_reveal_text("TitleMain", "最后一颗星", (0.62, 0.56, 0.45), 1.08, "RevealMain", font_main, strength=3.6)
+    sub_obj, sub_rev = _make_reveal_text("TitleSub", "每一片星空，都始于一束微光。", (0.62, -0.74, 0.45), 0.39, "RevealSub", font_sub, strength=3.0)
 
-    # Small delicate sparkle stars over the stone floor (rotated flat for overhead camera!)
+    # Small delicate sparkle stars framing the edges cleanly (never overlapping text!)
     rng = random.Random(99)
-    for i in range(18):
+    placed = 0
+    for _ in range(60):
+        sx = rng.uniform(-4.3, 4.3)
+        sy = rng.uniform(-2.2, 2.2)
+        if -1.9 < sx < 3.4 and -1.15 < sy < 1.25:
+            continue
         sp = make_star_diamond(
-            scene, f"TitleSpark_{i}",
-            (rng.uniform(-4.2, 4.2), rng.uniform(-2.2, 2.2), 0.35),
+            scene, f"TitleSpark_{placed}",
+            (sx, sy, 0.35),
             size=rng.uniform(0.07, 0.16), strength=4.8
         )
         sp.rotation_euler = (math.pi / 2, 0, 0)
+        placed += 1
+        if placed >= 16:
+            break
 
     return {
         "hand": hand_piv,
