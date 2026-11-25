@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>最后一颗星 · The Last Star — 交互式绘本小游戏</title>
+<style>
+  :root {
+    --ink: #121728;
+    --paper: #f6eedc;
+    --gold: #ffd978;
+    --teal: #3ea39f;
+    --indigo: #131b38;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #0a0f22;
+    font-family: "KaiTi", "STKaiti", "Songti SC", "PingFang SC", "Microsoft YaHei", serif;
+    color: var(--paper);
+  }
+  #stage {
+    position: relative; width: 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 45%, #162044 0%, #090d1e 100%);
+  }
+  canvas {
+    display: block; width: 100%; height: 100%;
+    cursor: crosshair; touch-action: none;
+  }
+  /* Subtle gouache paper grain overlay */
+  #grain {
+    pointer-events: none; position: fixed; inset: 0; opacity: 0.06;
+    background-image: radial-gradient(rgba(255,255,255,0.45) 0.5px, transparent 0.5px);
+    background-size: 3px 3px;
+  }
+  #hud {
+    position: fixed; top: 16px; left: 18px; right: 18px;
+    display: flex; justify-content: space-between; align-items: center;
+    pointer-events: none; z-index: 10;
+  }
+  .pill {
+    pointer-events: auto;
+    background: rgba(16, 22, 46, 0.72);
+    border: 1.5px solid rgba(255, 228, 168, 0.32);
+    border-radius: 999px;
+    padding: 7px 16px;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    color: #f6eedc;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .btn {
+    cursor: pointer; transition: transform 0.16s ease, background 0.18s ease, border-color 0.18s ease;
+  }
+  .btn:hover { background: rgba(34, 46, 86, 0.88); border-color: rgba(255, 217, 120, 0.75); transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .act-dots { display: inline-flex; gap: 7px; align-items: center; }
+  .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1.5px solid rgba(255, 224, 155, 0.55);
+    background: transparent; cursor: pointer; transition: all 0.25s;
+  }
+  .dot.active { background: var(--gold); box-shadow: 0 0 10px var(--gold); transform: scale(1.25); }
+  .dot.done { background: rgba(114, 224, 210, 0.85); border-color: #72e0d2; }
+  #prompt {
+    position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
+    pointer-events: none; z-index: 10;
+    background: rgba(14, 20, 42, 0.78);
+    border: 1.5px solid rgba(255, 224, 155, 0.38);
+    border-radius: 16px;
+    padding: 11px 24px;
+    font-size: 16px; letter-spacing: 0.06em;
+    text-align: center; max-width: 90vw;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    transition: opacity 0.4s ease;
+  }
+  #prompt b { color: var(--gold); font-weight: normal; }
+  #cover {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 42%, rgba(20, 29, 64, 0.58), rgba(8, 12, 28, 0.86));
+    transition: opacity 0.8s ease;
+    text-align: center; padding: 24px;
+  }
+  #cover.hidden { opacity: 0; pointer-events: none; }
+  #cover h1 {
+    font-size: clamp(42px, 7vw, 76px);
+    font-weight: normal; letter-spacing: 0.16em;
+    color: #fff9e8;
+    text-shadow: 0 0 28px rgba(255, 220, 130, 0.55), 0 4px 18px rgba(0,0,0,0.6);
+    margin-bottom: 10px;
+  }
+  #cover .sub {
+    font-size: clamp(16px, 2.3vw, 22px);
+    color: rgba(235, 238, 255, 0.88);
+    letter-spacing: 0.14em; margin-bottom: 10px;
+  }
+  #cover .tag {
+    font-size: 13px; color: rgba(190, 208, 255, 0.72);
+    letter-spacing: 0.1em; margin-bottom: 34px;
+    font-family: "Microsoft YaHei", sans-serif;
+  }
+  #startBtn {
+    pointer-events: auto; cursor: pointer;
+    font-family: inherit; font-size: 20px; letter-spacing: 0.18em;
+    padding: 13px 38px; border-radius: 999px;
+    border: 2px solid rgba(255, 225, 148, 0.8);
+    background: linear-gradient(135deg, rgba(255, 214, 112, 0.24), rgba(82, 168, 180, 0.28));
+    color: #fff9e6;
+    box-shadow: 0 0 26px rgba(255, 214, 112, 0.28), inset 0 0 12px rgba(255,255,255,0.12);
+    transition: all 0.22s ease;
+  }
+  #startBtn:hover {
+    transform: translateY(-2px) scale(1.03);
+    background: linear-gradient(135deg, rgba(255, 214, 112, 0.42), rgba(82, 168, 180, 0.42));
+    box-shadow: 0 0 36px rgba(255, 214, 112, 0.5);
+  }
+  #touchPad {
+    position: fixed; bottom: 86px; left: 20px; z-index: 12;
+    display: none; gap: 10px;
+  }
+  .tbtn {
+    width: 52px; height: 52px; border-radius: 50%;
+    background: rgba(16, 24, 52, 0.7);
+    border: 1.5px solid rgba(255, 226, 165, 0.45);
+    color: #fff6dc; font-size: 20px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  @media (hover: none) and (pointer: coarse) {
+    #touchPad { display: flex; }
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="grain"></div>
+</div>
+
+<div id="hud">
+  <div class="pill">
+    <span id="actTitle">第一幕 · 暮色天文台</span>
+    <span class="act-dots" id="actDots"></span>
+  </div>
+  <div style="display:flex; gap:10px;">
+    <button class="pill btn" id="muteBtn" title="开关音乐">🔊 音乐：开</button>
+    <button class="pill btn" id="replayBtn" title="重新开始">↺ 重玩</button>
+  </div>
+</div>
+
+<div id="prompt">使用 <b>A / D</b> 或 <b>← / →</b>（也可直接点击画面）移动小机器人，靠近天文台点亮暖窗</div>
+
+<div id="touchPad">
+  <button class="tbtn" id="btnL">◀</button>
+  <button class="tbtn" id="btnR">▶</button>
+</div>
+
+<div id="cover">
+  <h1>最后一颗星</h1>
+  <div class="sub">每一片星空，都始于一束微光。</div>
+  <div class="tag">手绘绘本风 2.5D 交互短片小游戏 · The Last Star</div>
+  <button id="startBtn">✦ 开始点亮星空</button>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  const coverEl = document.getElementById("cover");
+  const startBtn = document.getElementById("startBtn");
+  const actTitleEl = document.getElementById("actTitle");
+  const actDotsEl = document.getElementById("actDots");
+  const promptEl = document.getElementById("prompt");
+  const muteBtn = document.getElementById("muteBtn");
+  const replayBtn = document.getElementById("replayBtn");
+
+  let W = 1280, H = 720, DPR = 1;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  // ==================== Procedural Web Audio Synth (Harp / Celesta / Wind / Pad) ====================
+  let audioCtx = null;
+  let muted = false;
+  let padTimer = null;
+  function initAudio() {
+    if (audioCtx) {
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      return;
+    }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audioCtx = new AC();
+    startAmbientChords();
+  }
+  function midiHz(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+  function playNote(midi, dur = 2.0, vol = 0.11, type = "harp") {
+    if (!audioCtx || muted) return;
+    const now = audioCtx.currentTime;
+    const f = midiHz(midi);
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(vol, now + (type === "pad" ? 0.9 : 0.015));
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    const osc1 = audioCtx.createOscillator();
+    const osc2 = audioCtx.createOscillator();
+    osc1.type = type === "pad" ? "sine" : "triangle";
+    osc2.type = "sine";
+    osc1.frequency.setValueAtTime(f, now);
+    osc2.frequency.setValueAtTime(type === "celesta" ? f * 3.0 : f * 2.0, now);
+
+    const g2 = audioCtx.createGain();
+    g2.gain.value = type === "celesta" ? 0.35 : 0.22;
+
+    osc1.connect(gain);
+    osc2.connect(g2);
+    g2.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + dur + 0.05);
+    osc2.stop(now + dur + 0.05);
+  }
+  const CHORDS = [
+    [48, 55, 64, 72],
+    [45, 57, 64, 72],
+    [41, 53, 60, 69],
+    [43, 55, 62, 71],
+  ];
+  let chordIdx = 0;
+  function startAmbientChords() {
+    if (padTimer) clearInterval(padTimer);
+    const tick = () => {
+      if (!audioCtx || muted) return;
+      const ch = CHORDS[chordIdx % CHORDS.length];
+      chordIdx++;
+      ch.forEach((m, i) => playNote(m, 4.4, i < 2 ? 0.032 : 0.022, "pad"));
+      if (state.act >= 2) {
+        playNote(ch[3] + 12, 2.2, 0.04, "celesta");
+      }
+    };
+    tick();
+    padTimer = setInterval(tick, 3800);
+  }
+  muteBtn.addEventListener("click", () => {
+    muted = !muted;
+    muteBtn.textContent = muted ? "🔇 音乐：关" : "🔊 音乐：开";
+  });
+
+  // ==================== Game State ====================
+  const ACTS = [
+    { name: "第一幕 · 暮色天文台", prompt: "用 <b>A / D</b>（或点击画面）让小机器人走到天文台前，点击<b>圆窗/大门</b>点亮并进入" },
+    { name: "第二幕 · 唤醒星象仪", prompt: "点击（或按空格）逐一点亮双球星象仪上的 <b>7 枚星辰镜头</b>，唤醒沉睡的星空" },
+    { name: "第三幕 · 连线星鲸与极光", prompt: "依次点击或划过夜空中闪烁的<b>星座光点</b>，唤醒游弋银河的巨型星鲸与极光" },
+    { name: "第四幕 · 接住最后一颗星", prompt: "左右移动小机器人接住飘落的<b>金色星光</b>，并在星夜下自由挥洒星尘" },
+  ];
+
+  const bgStars = Array.from({ length: 140 }, (_, i) => ({
+    x: ((i * 73.13) % 100) / 100,
+    y: ((i * 41.77) % 68) / 100,
+    r: 0.7 + (i % 5) * 0.45,
+    ph: i * 1.13,
+  }));
+
+  const reeds = Array.from({ length: 78 }, (_, i) => ({
+    x: (i / 77) * 1.08 - 0.04,
+    h: 55 + ((i * 37) % 85),
+    lean: ((i % 7) - 3) * 5,
+    ph: i * 0.45,
+  }));
+
+  // 12 constellation nodes forming a graceful humpback Star Whale (normalized 0..1)
+  const WHALE_NODES = [
+    { x: 0.24, y: 0.34 }, // 0 upper fluke tip
+    { x: 0.31, y: 0.44 }, // 1 tail peduncle
+    { x: 0.26, y: 0.55 }, // 2 lower fluke tip
+    { x: 0.41, y: 0.40 }, // 3 rear dorsal
+    { x: 0.53, y: 0.34 }, // 4 upper back
+    { x: 0.66, y: 0.36 }, // 5 whale forehead
+    { x: 0.75, y: 0.44 }, // 6 rounded nose
+    { x: 0.68, y: 0.53 }, // 7 jaw
+    { x: 0.56, y: 0.56 }, // 8 deep chest
+    { x: 0.46, y: 0.68 }, // 9 sweeping pectoral flipper tip
+    { x: 0.44, y: 0.51 }, // 10 belly
+    { x: 0.62, y: 0.44 }, // 11 heart/eye star
+  ];
+  const WHALE_EDGES = [
+    [0,1],[1,2],[1,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,1],
+    [5,11],[11,6],[11,7],[11,8],[11,4],[10,4],[10,3]
+  ];
+
+  // 7 interactive brass lenses on the dual-sphere starball (relative to center)
+  const LENS_OFFSETS = [
+    { dx: -52, dy: 82, note: 60 },
+    { dx: 18,  dy: 92, note: 64 },
+    { dx: -24, dy: 42, note: 67 },
+    { dx: 42,  dy: 54, note: 71 },
+    { dx: 16,  dy: -48, note: 72 },
+    { dx: 68,  dy: -72, note: 76 },
+    { dx: 26,  dy: -108, note: 79 },
+  ];
+
+  const state = {
+    started: false,
+    act: 0,
+    completedActs: [false, false, false, false],
+    time: 0,
+    fade: 0,
+    fadeTarget: 0,
+    pendingAct: null,
+    // Robot
+    robX: 0.22,
+    robTargetX: null,
+    robFacing: 1,
+    robWalk: 0,
+    robHeadTilt: 0,
+    robArmRaise: 0,
+    // Act 0
+    windowLit: false,
+    doorReady: false,
+    // Act 1
+    lensesLit: [false, false, false, false, false, false, false],
+    beams: [],
+    shutterOpen: 0,
+    vortexActive: false,
+    vortexFlash: 0,
+    // Act 2
+    whaleConnected: 0,
+    whaleBloom: 0,
+    auroraAlpha: 0,
+    whaleDrift: 0,
+    // Act 3
+    fallingStar: { x: 0.66, y: 0.14, caught: false },
+    titleReveal: 0,
+    // Free stardust particles
+    sparks: [],
+    mouse: { x: 0, y: 0, down: false },
+  };
+
+  const keys = { left: false, right: false };
+
+  function buildDots() {
+    actDotsEl.innerHTML = "";
+    ACTS.forEach((a, idx) => {
+      const d = document.createElement("span");
+      d.className = "dot" + (state.act === idx ? " active" : "") + (state.completedActs[idx] ? " done" : "");
+      d.title = a.name;
+      d.addEventListener("click", () => switchAct(idx));
+      actDotsEl.appendChild(d);
+    });
+  }
+
+  function updateHUD() {
+    actTitleEl.textContent = ACTS[state.act].name;
+    promptEl.innerHTML = ACTS[state.act].prompt;
+    buildDots();
+  }
+
+  function switchAct(idx) {
+    if (idx === state.act && state.pendingAct === null) return;
+    state.pendingAct = idx;
+    state.fadeTarget = 1;
+  }
+
+  function applyActReset(idx) {
+    state.act = idx;
+    state.robTargetX = null;
+    state.robArmRaise = 0;
+    if (idx === 0) {
+      state.robX = 0.22;
+      state.robFacing = 1;
+    } else if (idx === 1) {
+      state.robX = 0.24;
+      state.robFacing = 1;
+      state.lensesLit = LENS_OFFSETS.map(() => false);
+      state.beams = [];
+      state.shutterOpen = 0;
+      state.vortexActive = false;
+      state.vortexFlash = 0;
+    } else if (idx === 2) {
+      state.whaleConnected = 0;
+      state.whaleBloom = 0;
+      state.auroraAlpha = 0;
+      state.whaleDrift = 0;
+    } else if (idx === 3) {
+      state.robX = 0.36;
+      state.robFacing = 1;
+      state.fallingStar = { x: 0.64, y: 0.14, caught: false };
+      state.titleReveal = 0;
+    }
+    updateHUD();
+  }
+
+  function spawnSparks(x, y, count = 14, gold = true) {
+    for (let i = 0; i < count; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const sp = 0.6 + Math.random() * 2.8;
+      state.sparks.push({
+        x, y,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp - 0.5,
+        life: 1,
+        decay: 0.014 + Math.random() * 0.02,
+        size: 2.5 + Math.random() * 5,
+        gold: gold && Math.random() > 0.25,
+      });
+    }
+  }
+
+  // ==================== Input ====================
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") { keys.left = true; state.robTargetX = null; }
+    if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") { keys.right = true; state.robTargetX = null; }
+    if (e.key === " " || e.key === "Enter") {
+      if (!state.started) { startGame(); return; }
+      handleSpaceAction();
+    }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") keys.left = false;
+    if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.right = false;
+  });
+
+  const btnL = document.getElementById("btnL");
+  const btnR = document.getElementById("btnR");
+  const bindTouch = (el, key) => {
+    el.addEventListener("pointerdown", (e) => { e.preventDefault(); keys[key] = true; state.robTargetX = null; });
+    el.addEventListener("pointerup", () => { keys[key] = false; });
+    el.addEventListener("pointerleave", () => { keys[key] = false; });
+  };
+  bindTouch(btnL, "left");
+  bindTouch(btnR, "right");
+
+  function handleSpaceAction() {
+    if (state.act === 0) {
+      if (!state.windowLit) {
+        state.windowLit = true;
+        playNote(72, 2.2, 0.14, "celesta");
+        spawnSparks(W * 0.61, H * 0.64, 24, true);
+        promptEl.innerHTML = "圆窗亮起了暖光！走近天文台<b>拱门</b>并点击（或按空格）进入内部";
+      } else {
+        state.completedActs[0] = true;
+        playNote(76, 2.0, 0.12, "harp");
+        switchAct(1);
+      }
+    } else if (state.act === 1) {
+      const next = state.lensesLit.findIndex((v) => !v);
+      if (next !== -1) igniteLens(next);
+    } else if (state.act === 2) {
+      if (state.whaleConnected < WHALE_NODES.length) {
+        connectWhaleNode(state.whaleConnected);
+      }
+    }
+  }
+
+  function igniteLens(idx) {
+    if (state.lensesLit[idx]) return;
+    state.lensesLit[idx] = true;
+    state.robArmRaise = 1.0;
+    const cx = W * 0.56, cy = H * 0.52;
+    const sc = Math.min(W / 1280, H / 720);
+    const lx = cx + LENS_OFFSETS[idx].dx * sc;
+    const ly = cy + LENS_OFFSETS[idx].dy * sc;
+    const tx = W * (0.2 + idx * 0.105);
+    const ty = H * (0.12 + (idx % 3) * 0.05);
+    state.beams.push({ x1: lx, y1: ly, x2: tx, y2: ty, life: 1.0 });
+    spawnSparks(lx, ly, 16, true);
+    spawnSparks(tx, ty, 20, true);
+    playNote(LENS_OFFSETS[idx].note, 2.6, 0.15, "celesta");
+    playNote(LENS_OFFSETS[idx].note - 12, 2.2, 0.10, "harp");
+
+    const litCount = state.lensesLit.filter(Boolean).length;
+    if (litCount < LENS_OFFSETS.length) {
+      promptEl.innerHTML = `已点亮 <b>${litCount} / ${LENS_OFFSETS.length}</b> 枚星辰镜头，继续点亮其余黄铜镜头！`;
+    } else {
+      state.vortexActive = true;
+      state.completedActs[1] = true;
+      promptEl.innerHTML = "✦ 星象仪全部苏醒！穹顶缓缓开启，星河正涌向夜空……";
+      [72, 76, 79, 84, 88, 91].forEach((m, i) => setTimeout(() => playNote(m, 2.8, 0.12, "harp"), i * 160));
+      setTimeout(() => { if (state.act === 1) switchAct(2); }, 3600);
+    }
+  }
+
+  function connectWhaleNode(idx) {
+    if (idx !== state.whaleConnected) return;
+    const n = WHALE_NODES[idx];
+    const nx = n.x * W + state.whaleDrift;
+    const ny = n.y * H;
+    state.whaleConnected++;
+    spawnSparks(nx, ny, 22, true);
+    const scale = [60, 62, 64, 67, 69, 72, 74, 76, 79, 81, 84, 88];
+    playNote(scale[idx % scale.length], 2.5, 0.14, "celesta");
+    playNote(scale[idx % scale.length] - 12, 2.5, 0.09, "harp");
+
+    if (state.whaleConnected >= WHALE_NODES.length) {
+      state.completedActs[2] = true;
+      promptEl.innerHTML = "✦ 巨型星云<b>星鲸</b>与极光苏醒了！欣赏片刻后将前往天文台石廊接住最后一颗星……";
+      [60, 64, 67, 72, 76, 79, 84].forEach((m, i) => setTimeout(() => playNote(m, 3.6, 0.12, "harp"), i * 130));
+      setTimeout(() => { if (state.act === 2) switchAct(3); }, 5600);
+    } else {
+      promptEl.innerHTML = `已连接 <b>${state.whaleConnected} / ${WHALE_NODES.length}</b> 颗星座星点，点击下一个发光光环！`;
+    }
+  }
+
+  function handlePointer(x, y, isDrag = false) {
+    state.mouse.x = x;
+    state.mouse.y = y;
+    if (!state.started) return;
+
+    if (state.act === 0 && !isDrag) {
+      // Check observatory window or door click
+      const obsX = W * 0.56, obsY = H * 0.62;
+      if (Math.hypot(x - W * 0.62, y - H * 0.64) < 70 && !state.windowLit) {
+        state.windowLit = true;
+        playNote(72, 2.2, 0.15, "celesta");
+        spawnSparks(W * 0.62, H * 0.64, 24, true);
+        promptEl.innerHTML = "圆窗亮起了暖光！走近天文台<b>拱门</b>并点击进入内部";
+        return;
+      }
+      if (Math.hypot(x - obsX, y - obsY) < 120) {
+        if (!state.windowLit) {
+          state.windowLit = true;
+          playNote(72, 2.2, 0.14, "celesta");
+          spawnSparks(W * 0.62, H * 0.64, 22, true);
+          promptEl.innerHTML = "暖窗亮起！再点击天文台拱门进入内部";
+          return;
+        }
+        state.completedActs[0] = true;
+        playNote(76, 2.0, 0.12, "harp");
+        switchAct(1);
+        return;
+      }
+      state.robTargetX = Math.max(0.08, Math.min(0.88, x / W));
+      spawnSparks(x, y, 5, true);
+    } else if (state.act === 1 && !isDrag) {
+      const cx = W * 0.56, cy = H * 0.52;
+      const sc = Math.min(W / 1280, H / 720);
+      for (let i = 0; i < LENS_OFFSETS.length; i++) {
+        const lx = cx + LENS_OFFSETS[i].dx * sc;
+        const ly = cy + LENS_OFFSETS[i].dy * sc;
+        if (Math.hypot(x - lx, y - ly) < 38 * sc + 16) {
+          igniteLens(i);
+          return;
+        }
+      }
+      state.robTargetX = Math.max(0.14, Math.min(0.42, x / W));
+    } else if (state.act === 2) {
+      if (state.whaleConnected < WHALE_NODES.length) {
+        const n = WHALE_NODES[state.whaleConnected];
+        const nx = n.x * W + state.whaleDrift;
+        const ny = n.y * H;
+        if (Math.hypot(x - nx, y - ny) < (isDrag ? 48 : 60)) {
+          connectWhaleNode(state.whaleConnected);
+        }
+      } else {
+        spawnSparks(x, y, isDrag ? 2 : 12, true);
+        if (!isDrag) playNote(72 + Math.floor((1 - y / H) * 14), 1.8, 0.08, "celesta");
+      }
+    } else if (state.act === 3) {
+      if (!state.fallingStar.caught) {
+        state.robTargetX = Math.max(0.16, Math.min(0.78, x / W));
+      } else {
+        // Free stargazing painting mode!
+        spawnSparks(x, y, isDrag ? 3 : 18, true);
+        if (!isDrag || Math.random() < 0.14) {
+          const pent = [60, 62, 64, 67, 69, 72, 74, 76, 79, 84];
+          playNote(pent[Math.floor((x / W) * pent.length) % pent.length], 2.0, 0.06, "celesta");
+        }
+      }
+    }
+  }
+
+  canvas.addEventListener("pointerdown", (e) => {
+    state.mouse.down = true;
+    handlePointer(e.clientX, e.clientY, false);
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (state.mouse.down) handlePointer(e.clientX, e.clientY, true);
+  });
+  window.addEventListener("pointerup", () => { state.mouse.down = false; });
+
+  function startGame() {
+    initAudio();
+    state.started = true;
+    coverEl.classList.add("hidden");
+    playNote(60, 2.6, 0.12, "harp");
+    setTimeout(() => playNote(67, 2.6, 0.12, "harp"), 180);
+    setTimeout(() => playNote(72, 3.0, 0.14, "celesta"), 360);
+    updateHUD();
+  }
+  startBtn.addEventListener("click", startGame);
+  replayBtn.addEventListener("click", () => {
+    state.completedActs = [false, false, false, false];
+    state.windowLit = false;
+    switchAct(0);
+  });
+
+  // ==================== Painterly 2.5D NPR Drawing Helpers ====================
+  function drawFourStar(x, y, size, color = "#fff9e8", alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    // Soft bloom glow
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 2.4);
+    g.addColorStop(0, "rgba(255, 246, 210, 0.78)");
+    g.addColorStop(0.45, "rgba(180, 210, 255, 0.22)");
+    g.addColorStop(1, "rgba(180, 210, 255, 0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 2.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    const inner = size * 0.22;
+    for (let i = 0; i < 8; i++) {
+      const r = i % 2 === 0 ? size : inner;
+      const a = (i * Math.PI) / 4;
+      const px = Math.cos(a) * r, py = Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawSky(nightMix = 0) {
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    if (nightMix < 0.5) {
+      grad.addColorStop(0, "#101634");
+      grad.addColorStop(0.55, "#282b52");
+      grad.addColorStop(1, "#3c3658");
+    } else {
+      grad.addColorStop(0, "#090f28");
+      grad.addColorStop(0.52, "#17244c");
+      grad.addColorStop(1, "#26335e");
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Diagonal Milky Way band on starry acts
+    if (nightMix > 0.3) {
+      ctx.save();
+      ctx.translate(W * 0.55, H * 0.32);
+      ctx.rotate(-0.34);
+      const mg = ctx.createRadialGradient(0, 0, 10, 0, 0, W * 0.55);
+      mg.addColorStop(0, `rgba(145, 168, 255, ${0.22 * nightMix})`);
+      mg.addColorStop(0.5, `rgba(110, 128, 220, ${0.10 * nightMix})`);
+      mg.addColorStop(1, "rgba(40, 50, 110, 0)");
+      ctx.fillStyle = mg;
+      ctx.scale(1.6, 0.42);
+      ctx.beginPath();
+      ctx.arc(0, 0, W * 0.48, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Twinkling stars
+    const starAlpha = 0.32 + nightMix * 0.68;
+    for (const s of bgStars) {
+      const tw = 0.55 + 0.45 * Math.sin(state.time * 2.2 + s.ph);
+      ctx.fillStyle = `rgba(255, 250, 232, ${tw * starAlpha})`;
+      ctx.beginPath();
+      ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawRobot(x, y, scale = 1, facing = 1, holdLantern = true, armLift = 0) {
+    ctx.save();
+    const bob = Math.abs(Math.sin(state.robWalk * 7)) * 4 * scale;
+    ctx.translate(x, y - bob);
+    ctx.scale(scale * facing, scale);
+
+    // Soft ground shadow
+    ctx.fillStyle = "rgba(8, 12, 28, 0.42)";
+    ctx.beginPath();
+    ctx.ellipse(0, 4, 24, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const legSw = Math.sin(state.robWalk * 7) * 7;
+    ctx.strokeStyle = "#151a2e";
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+
+    // Legs & rounded feet
+    for (const [lx, sw] of [[-9, legSw], [9, -legSw]]) {
+      ctx.fillStyle = "#414962";
+      ctx.fillRect(lx - 3, -24, 6, 20);
+      ctx.strokeRect(lx - 3, -24, 6, 20);
+      ctx.fillStyle = "#e6e2d8";
+      ctx.beginPath();
+      ctx.ellipse(lx + sw * 0.3 + 2, -2, 9, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Back arm
+    ctx.save();
+    ctx.translate(-17, -50);
+    ctx.rotate(0.22 - legSw * 0.03);
+    ctx.strokeStyle = "#151a2e";
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-4, 22); ctx.stroke();
+    ctx.restore();
+
+    // Torso
+    ctx.fillStyle = "#e7e3d9";
+    ctx.beginPath();
+    ctx.roundRect(-19, -58, 38, 36, 6);
+    ctx.fill();
+    ctx.stroke();
+    // Teal chest stripe
+    ctx.fillStyle = "#3ba19c";
+    ctx.fillRect(-18, -42, 36, 9);
+    // Little chest dial
+    ctx.fillStyle = "#2b3248";
+    ctx.beginPath(); ctx.arc(8, -49, 4, 0, Math.PI * 2); ctx.fill();
+
+    // Neck
+    ctx.fillStyle = "#394058";
+    ctx.fillRect(-11, -64, 22, 7);
+    ctx.strokeRect(-11, -64, 22, 7);
+
+    // Dome head
+    ctx.save();
+    ctx.translate(0, -64);
+    ctx.rotate(Math.sin(state.time * 1.4) * 0.04 + state.robHeadTilt);
+
+    // Antenna + glowing amber orb
+    ctx.strokeStyle = "#151a2e";
+    ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(-8, -36); ctx.lineTo(-14, -52); ctx.stroke();
+    const ag = ctx.createRadialGradient(-14, -54, 1, -14, -54, 16);
+    ag.addColorStop(0, "#fff5ba");
+    ag.addColorStop(0.45, "rgba(255, 200, 72, 0.7)");
+    ag.addColorStop(1, "rgba(255, 200, 72, 0)");
+    ctx.fillStyle = ag;
+    ctx.beginPath(); ctx.arc(-14, -54, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#ffd65c";
+    ctx.beginPath(); ctx.arc(-14, -54, 5, 0, Math.PI * 2); ctx.fill();
+
+    // Head dome shape
+    ctx.fillStyle = "#ebe7dd";
+    ctx.beginPath();
+    ctx.arc(0, -18, 25, Math.PI, 0);
+    ctx.lineTo(25, 0);
+    ctx.lineTo(-25, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Side ear bolt
+    ctx.fillStyle = "#4d5672";
+    ctx.beginPath(); ctx.roundRect(-29, -22, 6, 12, 2); ctx.fill(); ctx.stroke();
+
+    // Big expressive cyclops eye!
+    ctx.fillStyle = "#b58b46";
+    ctx.beginPath(); ctx.arc(8, -19, 15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#151824";
+    ctx.beginPath(); ctx.arc(8, -19, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#ffd66b";
+    ctx.beginPath(); ctx.arc(9, -19, 8.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#121520";
+    ctx.beginPath(); ctx.arc(10, -19, 4.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath(); ctx.arc(6.5, -22.5, 2.4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // Front arm + pincer claw + optional warm glowing lantern
+    ctx.save();
+    ctx.translate(16, -48);
+    ctx.rotate(-0.25 - armLift * 1.15);
+    ctx.strokeStyle = "#151a2e";
+    ctx.lineWidth = 4.5;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(14, 18); ctx.stroke();
+    // Teal wrist
+    ctx.fillStyle = "#3ba19c";
+    ctx.beginPath(); ctx.arc(15, 19, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // Pincer prongs
+    ctx.fillStyle = "#eeeae0";
+    ctx.beginPath(); ctx.ellipse(22, 16, 6, 3, -0.35, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(20, 24, 6, 3, 0.45, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+    if (holdLantern) {
+      const lx = 24, ly = 32;
+      const lg = ctx.createRadialGradient(lx, ly, 2, lx, ly, 58);
+      lg.addColorStop(0, "rgba(255, 214, 108, 0.72)");
+      lg.addColorStop(0.45, "rgba(255, 178, 68, 0.22)");
+      lg.addColorStop(1, "rgba(255, 178, 68, 0)");
+      ctx.fillStyle = lg;
+      ctx.beginPath(); ctx.arc(lx, ly, 58, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#ffe38c";
+      ctx.beginPath(); ctx.roundRect(lx - 6, ly - 8, 12, 15, 3); ctx.fill();
+      ctx.strokeStyle = "#2b2520"; ctx.lineWidth = 2; ctx.stroke();
+    }
+    ctx.restore();
+    ctx.restore();
+  }
+
+  // ==================== Scene 0: Twilight Observatory Exterior ====================
+  function drawAct0() {
+    drawSky(0.15);
+    const horizonY = H * 0.73;
+
+    // Distant twilight clouds
+    ctx.fillStyle = "rgba(116, 110, 165, 0.22)";
+    for (let i = 0; i < 5; i++) {
+      const cx = ((i * 310 + state.time * 6) % (W + 320)) - 160;
+      const cy = H * (0.16 + (i % 3) * 0.11);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 130 + (i % 2) * 50, 18, -0.08, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Distant silhouette mountains
+    ctx.fillStyle = "#19203f";
+    ctx.beginPath();
+    ctx.moveTo(0, horizonY);
+    for (let x = 0; x <= W; x += 60) {
+      const mh = 22 + Math.sin(x * 0.008) * 18 + Math.cos(x * 0.017) * 12;
+      ctx.lineTo(x, horizonY - mh);
+    }
+    ctx.lineTo(W, horizonY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Plains ground & curving path
+    const gg = ctx.createLinearGradient(0, horizonY, 0, H);
+    gg.addColorStop(0, "#232a4c");
+    gg.addColorStop(1, "#121730");
+    ctx.fillStyle = gg;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+
+    ctx.fillStyle = "rgba(88, 92, 126, 0.45)";
+    ctx.beginPath();
+    ctx.moveTo(W * 0.51, horizonY + 4);
+    ctx.quadraticCurveTo(W * 0.46, H * 0.86, W * 0.36, H);
+    ctx.lineTo(W * 0.52, H);
+    ctx.quadraticCurveTo(W * 0.56, H * 0.85, W * 0.59, horizonY + 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Left satellite dish
+    ctx.save();
+    ctx.translate(W * 0.24, horizonY - 2);
+    ctx.strokeStyle = "#141930"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -42); ctx.stroke();
+    ctx.fillStyle = "#6e7794";
+    ctx.beginPath(); ctx.ellipse(-4, -52, 34, 22, -0.55, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.restore();
+
+    // Observatory building (center-right)
+    const ox = W * 0.56, oy = horizonY + 12;
+    const sc = Math.min(W / 1280, H / 720) * 1.05;
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.scale(sc, sc);
+    ctx.strokeStyle = "#151a30"; ctx.lineWidth = 3;
+
+    // Side shed
+    ctx.fillStyle = "#48516e";
+    ctx.fillRect(102, -62, 74, 62); ctx.strokeRect(102, -62, 74, 62);
+    ctx.fillStyle = "#8a523e";
+    ctx.beginPath(); ctx.moveTo(96, -66); ctx.lineTo(186, -54); ctx.lineTo(186, -44); ctx.lineTo(96, -56); ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    // Metal dome
+    const dg = ctx.createLinearGradient(-115, -240, 115, -110);
+    dg.addColorStop(0, "#7f8ba8");
+    dg.addColorStop(0.55, "#5c6786");
+    dg.addColorStop(1, "#394260");
+    ctx.fillStyle = dg;
+    ctx.beginPath();
+    ctx.arc(0, -118, 114, Math.PI, 0);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // Dome seam lines
+    ctx.strokeStyle = "rgba(22, 28, 52, 0.55)"; ctx.lineWidth = 2;
+    for (const rx of [-55, -18, 18, 55]) {
+      ctx.beginPath();
+      ctx.moveTo(rx, -118);
+      ctx.quadraticCurveTo(rx * 0.72, -195, rx * 0.14, -231);
+      ctx.stroke();
+    }
+    // Finial
+    ctx.strokeStyle = "#151a30"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, -232); ctx.lineTo(0, -258); ctx.stroke();
+
+    // Catwalk & delicate rust railing
+    ctx.fillStyle = "#5a6380";
+    ctx.fillRect(-124, -122, 248, 12); ctx.strokeRect(-124, -122, 248, 12);
+    ctx.strokeStyle = "#9b5e43"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(-120, -138); ctx.lineTo(120, -138); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-120, -128); ctx.lineTo(120, -128); ctx.stroke();
+    for (let px = -116; px <= 116; px += 29) {
+      ctx.beginPath(); ctx.moveTo(px, -122); ctx.lineTo(px, -140); ctx.stroke();
+    }
+
+    // Cylindrical stone tower
+    ctx.strokeStyle = "#151a30"; ctx.lineWidth = 3;
+    ctx.fillStyle = "#555f7d";
+    ctx.fillRect(-114, -110, 228, 110); ctx.strokeRect(-114, -110, 228, 110);
+    // Horizontal stone block courses
+    ctx.strokeStyle = "rgba(25, 32, 58, 0.35)"; ctx.lineWidth = 1.5;
+    for (let by = -92; by < 0; by += 18) {
+      ctx.beginPath(); ctx.moveTo(-114, by); ctx.lineTo(114, by); ctx.stroke();
+      const off = ((by / 18) % 2) * 18;
+      for (let bx = -100 + off; bx < 110; bx += 36) {
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx, by + 18); ctx.stroke();
+      }
+    }
+
+    // Arched door
+    ctx.strokeStyle = "#151a30"; ctx.lineWidth = 3;
+    ctx.fillStyle = state.windowLit ? "#3b3a54" : "#222944";
+    ctx.beginPath();
+    ctx.arc(-6, -42, 18, Math.PI, 0);
+    ctx.lineTo(12, 0); ctx.lineTo(-24, 0); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Porthole windows (right one glows warmly when lit!)
+    const ports = [-78, -46, 56];
+    ports.forEach((px, pi) => {
+      const lit = pi === 2 && state.windowLit;
+      if (lit) {
+        const wg = ctx.createRadialGradient(px, -54, 4, px, -54, 62);
+        wg.addColorStop(0, "rgba(255, 224, 122, 0.85)");
+        wg.addColorStop(0.5, "rgba(255, 182, 74, 0.25)");
+        wg.addColorStop(1, "rgba(255, 182, 74, 0)");
+        ctx.fillStyle = wg;
+        ctx.beginPath(); ctx.arc(px, -54, 62, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = lit ? "#ffdf82" : "#263050";
+      ctx.beginPath(); ctx.arc(px, -54, 14, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      if (pi === 2 && !state.windowLit) {
+        // Gentle pulse ring hinting to click!
+        const pulse = 18 + Math.sin(state.time * 4) * 5;
+        ctx.strokeStyle = "rgba(255, 220, 128, 0.72)";
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(px, -54, pulse, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = "#151a30"; ctx.lineWidth = 3;
+      }
+    });
+    ctx.restore();
+
+    // Robot walking on foreground path
+    drawRobot(state.robX * W, H * 0.84, Math.min(W / 1280, H / 720) * 1.15, state.robFacing, true, 0);
+
+    // Swaying foreground reeds
+    ctx.strokeStyle = "#11162c";
+    for (const r of reeds) {
+      const rx = r.x * W;
+      const sway = Math.sin(state.time * 1.8 + r.ph) * 11;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(rx, H + 4);
+      ctx.quadraticCurveTo(rx + r.lean + sway * 0.5, H - r.h * 0.55, rx + r.lean * 1.4 + sway, H - r.h);
+      ctx.stroke();
+    }
+  }
+
+  // ==================== Scene 1: Observatory Interior & Dual-Sphere Starball ====================
+  function drawAct1() {
+    // Deep cozy indigo observatory interior
+    const bg = ctx.createRadialGradient(W * 0.54, H * 0.42, 40, W * 0.54, H * 0.5, W * 0.7);
+    bg.addColorStop(0, "#232e54");
+    bg.addColorStop(0.65, "#151c38");
+    bg.addColorStop(1, "#0b1024");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Ribbed dome ceiling + opening skylight slit
+    ctx.strokeStyle = "rgba(120, 145, 210, 0.16)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i <= 10; i++) {
+      ctx.beginPath();
+      ctx.moveTo((i / 10) * W, 0);
+      ctx.quadraticCurveTo(W * 0.5, H * 0.16, (i / 10) * W, H * 0.32);
+      ctx.stroke();
+    }
+
+    // Volumetric god-ray cone streaming from dome slit
+    const slitW = 70 + state.shutterOpen * 260;
+    const gr = ctx.createLinearGradient(W * 0.34, 0, W * 0.52, H * 0.86);
+    gr.addColorStop(0, `rgba(185, 214, 255, ${0.26 + state.shutterOpen * 0.3})`);
+    gr.addColorStop(1, "rgba(120, 150, 220, 0)");
+    ctx.fillStyle = gr;
+    ctx.beginPath();
+    ctx.moveTo(W * 0.34 - slitW * 0.3, 0);
+    ctx.lineTo(W * 0.34 + slitW * 0.7, 0);
+    ctx.lineTo(W * 0.62 + slitW * 0.5, H * 0.9);
+    ctx.lineTo(W * 0.25, H * 0.9);
+    ctx.closePath();
+    ctx.fill();
+
+    // Wooden floor planks
+    ctx.fillStyle = "#2c2533";
+    ctx.fillRect(0, H * 0.76, W, H * 0.24);
+    ctx.strokeStyle = "rgba(14, 16, 30, 0.45)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 12; i++) {
+      const y = H * 0.76 + (i / 12) * H * 0.24;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+
+    // Stacked wooden crates for the robot
+    ctx.fillStyle = "#7c5840"; ctx.strokeStyle = "#161a2c"; ctx.lineWidth = 3;
+    ctx.fillRect(W * 0.16, H * 0.66, 128, 76); ctx.strokeRect(W * 0.16, H * 0.66, 128, 76);
+    ctx.fillRect(W * 0.19, H * 0.58, 92, 58); ctx.strokeRect(W * 0.19, H * 0.58, 92, 58);
+
+    // Centerpiece Zeiss Dual-Sphere Starball Projector!
+    const cx = W * 0.56, cy = H * 0.52;
+    const sc = Math.min(W / 1280, H / 720);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(sc, sc);
+    ctx.strokeStyle = "#151a2e"; ctx.lineWidth = 3.5;
+
+    // Pedestal & tripod legs
+    ctx.fillStyle = "#2b3552";
+    ctx.beginPath(); ctx.ellipse(0, 210, 125, 28, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-62, 200); ctx.lineTo(-10, -10); ctx.lineTo(14, -10); ctx.lineTo(-34, 200); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(64, 200); ctx.lineTo(20, -10); ctx.lineTo(-4, -10); ctx.lineTo(36, 200); ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    // Curved brass quadrant gear arc
+    ctx.strokeStyle = "#c89d54"; ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.arc(10, 0, 118, -0.7, 0.85); ctx.stroke();
+    ctx.strokeStyle = "#151a2e"; ctx.lineWidth = 3;
+
+    // Tilted spine + brass gears
+    ctx.save();
+    ctx.rotate(0.32);
+    ctx.fillStyle = "#394868";
+    ctx.fillRect(-20, -110, 40, 220); ctx.strokeRect(-20, -110, 40, 220);
+    ctx.fillStyle = "#c89d54";
+    for (const gy of [-42, 0, 42]) {
+      ctx.fillRect(-42, gy - 8, 84, 16); ctx.strokeRect(-42, gy - 8, 84, 16);
+    }
+
+    // Two verdigris patina spheres
+    for (const sy of [-102, 102]) {
+      const sg = ctx.createRadialGradient(-22, sy - 22, 8, 0, sy, 84);
+      sg.addColorStop(0, "#73b5a8");
+      sg.addColorStop(0.55, "#5b7d7c");
+      sg.addColorStop(1, "#373a4c");
+      ctx.fillStyle = sg;
+      ctx.beginPath(); ctx.arc(0, sy, 76, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#c89d54";
+      ctx.fillRect(-78, sy - 7, 156, 14); ctx.strokeRect(-78, sy - 7, 156, 14);
+    }
+    ctx.restore();
+    ctx.restore();
+
+    // Interactive brass projection lenses + beams!
+    for (const b of state.beams) {
+      ctx.save();
+      ctx.strokeStyle = `rgba(255, 236, 168, ${b.life * 0.9})`;
+      ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke();
+      drawFourStar(b.x2, b.y2, 22 * b.life + 10, "#fff8dc", b.life);
+      ctx.restore();
+    }
+
+    LENS_OFFSETS.forEach((l, idx) => {
+      const lx = cx + l.dx * sc;
+      const ly = cy + l.dy * sc;
+      const lit = state.lensesLit[idx];
+      if (lit) {
+        drawFourStar(lx, ly, 20 + Math.sin(state.time * 5 + idx) * 3, "#ffe48a", 0.95);
+      } else {
+        const pulse = 18 + Math.sin(state.time * 4 + idx) * 4;
+        ctx.strokeStyle = "rgba(255, 220, 128, 0.72)";
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(lx, ly, pulse, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.fillStyle = "#c89d54"; ctx.strokeStyle = "#151a2e"; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(lx, ly, 14 * sc, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = lit ? "#fff6c8" : "#1c2238";
+      ctx.beginPath(); ctx.arc(lx, ly, 9 * sc, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // Swirling golden star vortex once all 7 lenses ignite!
+    if (state.vortexActive) {
+      state.shutterOpen = Math.min(1, state.shutterOpen + 0.012);
+      ctx.save();
+      ctx.translate(cx, cy - 30);
+      for (let i = 0; i < 60; i++) {
+        const a = state.time * (2.5 + (i % 5) * 0.4) + i * 0.65;
+        const r = 40 + ((i * 19 + state.time * 90) % (Math.max(W, H) * 0.48));
+        const px = Math.cos(a) * r, py = Math.sin(a) * r * 0.65;
+        drawFourStar(px, py, 5 + (i % 4) * 3, "#fff4cc", 0.85);
+      }
+      ctx.restore();
+    }
+
+    // Robot standing in lower-left looking up at the starball
+    state.robHeadTilt = -0.18;
+    drawRobot(state.robX * W, H * 0.79, sc * 1.15, 1, true, state.robArmRaise);
+  }
+
+  // ==================== Scene 2: Constellation Star Whale & Aurora ====================
+  function drawAct2() {
+    drawSky(1.0);
+    const horizonY = H * 0.80;
+
+    // Gentle distant mountain ridge
+    ctx.fillStyle = "#141d3d";
+    ctx.beginPath();
+    ctx.moveTo(0, horizonY);
+    for (let x = 0; x <= W; x += 50) {
+      ctx.lineTo(x, horizonY - 14 - Math.sin(x * 0.006) * 14 - Math.cos(x * 0.015) * 8);
+    }
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+    ctx.fill();
+
+    // Tiny glowing observatory on bottom-left
+    ctx.save();
+    ctx.translate(W * 0.11, horizonY + 8);
+    ctx.scale(0.32, 0.32);
+    ctx.fillStyle = "#546082"; ctx.fillRect(-100, -90, 200, 90);
+    ctx.beginPath(); ctx.arc(0, -92, 100, Math.PI, 0); ctx.fill();
+    drawFourStar(0, -195, 38, "#fff8dc", 0.95);
+    ctx.restore();
+
+    if (state.whaleConnected >= WHALE_NODES.length) {
+      state.whaleBloom = Math.min(1, state.whaleBloom + 0.015);
+      state.auroraAlpha = Math.min(1, state.auroraAlpha + 0.012);
+      state.whaleDrift = Math.sin(state.time * 0.55) * 28;
+    }
+
+    const drift = state.whaleDrift;
+    const swimY = Math.sin(state.time * 1.1) * 10 * state.whaleBloom;
+
+    // 3-layer shimmering Aurora Borealis trailing behind the whale's tail!
+    if (state.auroraAlpha > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = state.auroraAlpha * 0.75;
+      for (let layer = 0; layer < 3; layer++) {
+        const yOff = layer * 14;
+        for (let i = 0; i < 46; i++) {
+          const u = i / 45;
+          const ax = W * (0.04 + u * 0.28) + drift * 0.5;
+          const ay = H * (0.42 + Math.sin(u * 5.2 + state.time * 1.1 + layer) * 0.06) + yOff;
+          const rayH = 90 + Math.sin(u * 12 + state.time * 2 + layer) * 35;
+          const edgeFade = Math.sin(u * Math.PI);
+          const ag = ctx.createLinearGradient(ax, ay + 25, ax, ay - rayH);
+          ag.addColorStop(0, "rgba(38, 245, 198, 0)");
+          ag.addColorStop(0.22, `rgba(42, 242, 196, ${0.42 * edgeFade})`);
+          ag.addColorStop(0.62, `rgba(74, 152, 255, ${0.32 * edgeFade})`);
+          ag.addColorStop(1, "rgba(138, 76, 248, 0)");
+          ctx.strokeStyle = ag;
+          ctx.lineWidth = 14;
+          ctx.beginPath();
+          ctx.moveTo(ax, ay + 25);
+          ctx.lineTo(ax, ay - rayH);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    // Translucent cosmic nebula whale silhouette fill once complete!
+    if (state.whaleBloom > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = state.whaleBloom * 0.58;
+      const wg = ctx.createLinearGradient(W * 0.25 + drift, H * 0.32, W * 0.76 + drift, H * 0.64);
+      wg.addColorStop(0, "rgba(88, 114, 245, 0.72)");
+      wg.addColorStop(0.55, "rgba(154, 138, 255, 0.65)");
+      wg.addColorStop(1, "rgba(218, 232, 255, 0.85)");
+      ctx.fillStyle = wg;
+      ctx.beginPath();
+      const outline = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2];
+      outline.forEach((ni, idx) => {
+        const px = WHALE_NODES[ni].x * W + drift;
+        const py = WHALE_NODES[ni].y * H + swimY;
+        if (idx === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Glowing constellation edges connecting discovered nodes
+    ctx.save();
+    ctx.strokeStyle = "rgba(225, 240, 255, 0.86)";
+    ctx.lineWidth = 2.2;
+    ctx.shadowColor = "#9bc4ff";
+    ctx.shadowBlur = 12;
+    for (const [a, b] of WHALE_EDGES) {
+      if (a < state.whaleConnected && b < state.whaleConnected) {
+        ctx.beginPath();
+        ctx.moveTo(WHALE_NODES[a].x * W + drift, WHALE_NODES[a].y * H + swimY);
+        ctx.lineTo(WHALE_NODES[b].x * W + drift, WHALE_NODES[b].y * H + swimY);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    // Draw all whale constellation star nodes
+    WHALE_NODES.forEach((n, idx) => {
+      const nx = n.x * W + drift;
+      const ny = n.y * H + swimY;
+      const lit = idx < state.whaleConnected;
+      const isNext = idx === state.whaleConnected;
+      if (isNext) {
+        const pr = 18 + Math.sin(state.time * 5) * 6;
+        ctx.strokeStyle = "rgba(255, 224, 132, 0.9)";
+        ctx.lineWidth = 2.4;
+        ctx.beginPath(); ctx.arc(nx, ny, pr, 0, Math.PI * 2); ctx.stroke();
+      }
+      drawFourStar(nx, ny, lit ? 15 : isNext ? 13 : 7, lit ? "#fff9e6" : "#a8beff", lit ? 1 : isNext ? 0.95 : 0.45);
+    });
+  }
+
+  // ==================== Scene 3: Balcony Catch + Chinese Calligraphy & Free Stargaze ====================
+  function drawAct3() {
+    drawSky(1.0);
+
+    // Sweeping stone catwalk deck & delicate lower railing (ZERO clipping!)
+    const deckY = H * 0.78;
+    ctx.fillStyle = "#3c4668";
+    ctx.strokeStyle = "#151a30"; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, deckY);
+    ctx.quadraticCurveTo(W * 0.45, deckY - 12, W, deckY + 24);
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Stone tower wall on far left
+    ctx.fillStyle = "#485378";
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(W * 0.14, 0); ctx.lineTo(W * 0.11, H); ctx.lineTo(0, H); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Sleek waist-height railing behind the outstretched hand
+    ctx.strokeStyle = "#a26346"; ctx.lineWidth = 3.5;
+    for (const ry of [deckY - 58, deckY - 28]) {
+      ctx.beginPath();
+      ctx.moveTo(W * 0.12, ry);
+      ctx.quadraticCurveTo(W * 0.5, ry - 12, W, ry + 26);
+      ctx.stroke();
+    }
+    for (let px = W * 0.16; px < W; px += 120) {
+      ctx.beginPath(); ctx.moveTo(px, deckY + 8); ctx.lineTo(px, deckY - 62); ctx.stroke();
+    }
+
+    // Robot on catwalk reaching gently upward!
+    const rx = state.robX * W;
+    const ry = deckY + 6;
+    const sc = Math.min(W / 1280, H / 720) * 1.45;
+    state.robHeadTilt = -0.14;
+    drawRobot(rx, ry, sc, state.robFacing, false, state.fallingStar.caught ? 0.95 : 0.65);
+
+    // Floating falling star to catch!
+    const fs = state.fallingStar;
+    const handX = rx + 42 * sc * state.robFacing;
+    const handY = ry - 86 * sc;
+    if (!fs.caught) {
+      fs.y += 0.0016;
+      if (fs.y > 0.72) fs.y = 0.12;
+      const sx = fs.x * W + Math.sin(state.time * 2.1) * 26;
+      const sy = fs.y * H;
+      drawFourStar(sx, sy, 22, "#fff5c8", 1);
+      if (Math.hypot(sx - handX, sy - handY) < 76) {
+        fs.caught = true;
+        state.completedActs[3] = true;
+        spawnSparks(handX, handY, 38, true);
+        [72, 76, 79, 84, 91].forEach((m, i) => setTimeout(() => playNote(m, 3.8, 0.13, "celesta"), i * 160));
+        promptEl.innerHTML = "✦ 你接住了最后一颗星！现在可以在夜空中<b>自由滑动鼠标泼洒星光</b>，或点击左上角重温任意一幕";
+        buildDots();
+      }
+    } else {
+      drawFourStar(handX, handY - 12, 18 + Math.sin(state.time * 4) * 2, "#fff7d2", 1);
+      state.titleReveal = Math.min(1, state.titleReveal + 0.012);
+
+      // Luminous calligraphic Chinese title floating in the starry sky!
+      ctx.save();
+      ctx.globalAlpha = state.titleReveal;
+      ctx.textAlign = "center";
+      ctx.shadowColor = "rgba(255, 224, 140, 0.7)";
+      ctx.shadowBlur = 20;
+      ctx.fillStyle = "#fff9e8";
+      ctx.font = `normal ${Math.round(Math.min(72, W * 0.075))}px "KaiTi", "STKaiti", serif`;
+      ctx.fillText("最后一颗星", W * 0.56, H * 0.30);
+      ctx.font = `normal ${Math.round(Math.min(26, W * 0.028))}px "KaiTi", "STKaiti", serif`;
+      ctx.fillStyle = "rgba(232, 238, 255, 0.92)";
+      ctx.fillText("每一片星空，都始于一束微光。", W * 0.56, H * 0.39);
+      ctx.restore();
+    }
+  }
+
+  // ==================== Main Loop ====================
+  function step() {
+    state.time += 1 / 60;
+    state.robArmRaise *= 0.94;
+
+    // Robot movement
+    let vx = 0;
+    if (keys.left) vx -= 0.0048;
+    if (keys.right) vx += 0.0048;
+    if (state.robTargetX !== null) {
+      const dx = state.robTargetX - state.robX;
+      if (Math.abs(dx) > 0.008) {
+        vx = Math.sign(dx) * 0.0046;
+      } else {
+        state.robTargetX = null;
+      }
+    }
+    if (vx !== 0) {
+      state.robX = Math.max(0.10, Math.min(0.86, state.robX + vx));
+      state.robFacing = vx > 0 ? 1 : -1;
+      state.robWalk += 0.055;
+    }
+
+    // Scene transition fade
+    if (state.pendingAct !== null) {
+      state.fade += (state.fadeTarget - state.fade) * 0.12;
+      if (state.fade > 0.96 && state.fadeTarget === 1) {
+        applyActReset(state.pendingAct);
+        state.fadeTarget = 0;
+      }
+      if (state.fade < 0.03 && state.fadeTarget === 0) {
+        state.fade = 0;
+        state.pendingAct = null;
+      }
+    }
+
+    // Update beams & sparks
+    for (const b of state.beams) b.life = Math.max(0.35, b.life * 0.992);
+    for (let i = state.sparks.length - 1; i >= 0; i--) {
+      const p = state.sparks[i];
+      p.x += p.vx; p.y += p.vy;
+      p.vy += 0.015;
+      p.life -= p.decay;
+      if (p.life <= 0) state.sparks.splice(i, 1);
+    }
+
+    // Render current act
+    if (state.act === 0) drawAct0();
+    else if (state.act === 1) drawAct1();
+    else if (state.act === 2) drawAct2();
+    else drawAct3();
+
+    // Render stardust particles on top
+    for (const p of state.sparks) {
+      drawFourStar(p.x, p.y, p.size * p.life, p.gold ? "#ffe694" : "#d8e8ff", p.life);
+    }
+
+    // Transition overlay
+    if (state.fade > 0.005) {
+      ctx.fillStyle = `rgba(10, 14, 30, ${state.fade})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    requestAnimationFrame(step);
+  }
+
+  buildDots();
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+output/frames/
+output/TheLastStar.mp4
+output/soundtrack.wav
+reference/
+__pycache__/
+*.pyc
+*.blend*
+*.log
